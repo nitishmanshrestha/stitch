@@ -2298,8 +2298,9 @@
             </span>
             <span class="data-status" id="dataStatus"
               >Enter a name and pick a level, then create or open a data file.
-              Browsers cannot open the C: drive root itself, so create a folder
-              on C: (for example C:\Stitch) and pick that.</span
+              Create asks once for your project folder (the one that contains
+              source/) and saves a new folder there named
+              name_level_date_time.</span
             >
             <span class="data-actions">
               <button
@@ -2875,7 +2876,7 @@
             type="button"
             class="btn btn-ghost btn-small"
             id="reloadSuggestionsBtn"
-            title="Read source/suggestions/suggestions.json again"
+            title="Read suggestions.json in this artifact's folder again"
           >
             Reload
           </button>
@@ -3006,9 +3007,9 @@
                   the artifact for the <code>gap-artifact-polisher</code> agent,
                   which suggests competencies from the knowledge base and lists
                   what is missing. The agent writes its replies to
-                  <code>source/suggestions/suggestions.json</code>. Stitch loads
-                  that file on its own; the <strong>Suggestions</strong> tab
-                  lists them all.
+                  <code>suggestions.json</code> in the artifact's folder. Stitch
+                  loads that file on its own; the
+                  <strong>Suggestions</strong> tab lists them all.
                 </p>
                 <div class="howto-example">
                   <span class="howto-example-label">Example</span>
@@ -3038,13 +3039,12 @@
                 </p>
                 <ul>
                   <li>
-                    <strong>HTML slides</strong> saves a folder in
-                    <em>source/html</em> with index.html, styles.css, data.json
-                    and images.
+                    <strong>HTML slides</strong> saves a folder with index.html,
+                    styles.css, data.json and images to <em>Export</em>.
                   </li>
                   <li>
-                    <strong>PDF</strong> saves to <em>source/pdf</em>, and
-                    <strong>Markdown</strong> to <em>source/md</em>.
+                    <strong>PDF</strong> and <strong>Markdown</strong> save to
+                    <em>Export</em>.
                   </li>
                   <li>
                     <strong>Include claim story in HTML slides and PDF</strong>
@@ -3053,11 +3053,11 @@
                   </li>
                 </ul>
                 <p>
-                  Names follow name_project_level (the project is left out when
-                  empty). Each export replaces the previous file or folder with
-                  the same name. Files go to source/html, source/pdf and
-                  source/md. The first export asks you to choose your source
-                  folder, and the app remembers it.
+                  Create makes a folder in source/ named name_level_date_time,
+                  holding name_level_date_time.json. Exports go to an Export
+                  folder inside it, and each export has a new timestamped name.
+                  Files chosen with Open existing ask once for the folder that
+                  holds them, and exports go there.
                 </p>
                 <p>
                   Exports use all ready artifacts for the current level. Agent
@@ -3112,7 +3112,7 @@
               <li>
                 Confirm the drafts. The agent writes the claims to
                 <code>source/your-name-le.json</code> and the replies to
-                <code>source/suggestions/suggestions.json</code>.
+                <code>suggestions.json</code> in the artifact's folder.
               </li>
               <li>
                 Click <strong>Open existing</strong> and choose that file. Hand
@@ -3335,6 +3335,7 @@
         level: DEFAULT_LEVEL,
         claims: [],
         dataFile: null,
+        sessionDir: null,
         pendingHandle: null,
         recalledHandle: null,
         busy: false,
@@ -4219,10 +4220,53 @@
             : "No AI suggestions yet.";
         const steps = loaded
           ? ""
-          : `<ol class="sugg-steps"><li>In Copilot Chat, choose <strong>gap-artifact-polisher</strong> and say <strong>assess my artifacts</strong>.</li><li>The agent saves its replies to <code>source/suggestions/suggestions.json</code>.</li><li>Click <strong>Reload</strong> above to show them here.</li></ol>`;
+          : `<ol class="sugg-steps"><li>In Copilot Chat, choose <strong>gap-artifact-polisher</strong> and say <strong>assess my artifacts</strong>.</li><li>The agent saves its replies to <code>suggestions.json</code> in the artifact's folder.</li><li>Click <strong>Reload</strong> above to show them here.</li></ol>`;
         $("suggestionList").innerHTML = claims.length
           ? claims.map(renderSuggestionCard).join("")
           : `<p class="empty">${esc(emptyText)}</p>${steps}`;
+      }
+
+      const FLAG_LABEL = {
+        strong: "Strongest",
+        improve: "Suggestion",
+        note: "Note",
+      };
+
+      // Turns one structured item (v2: findings with flags, competencies with reasons) into the reply text the Suggestions view parses. Older items keep their agentSuggestion string.
+      function suggestionItemText(item) {
+        if (!Array.isArray(item.findings) && !Array.isArray(item.competencies))
+          return String(item.agentSuggestion || "");
+        const oneLine = (value) =>
+          String(value ?? "")
+            .replace(/\s+/g, " ")
+            .trim();
+        const lines = [];
+        const areas = new Map();
+        (item.findings || []).forEach((finding) => {
+          const area = oneLine(finding.area) || "Overall";
+          const key = oneLine(finding.flag).toLowerCase();
+          const flag = FLAG_LABEL[key] ? key : "note";
+          if (!areas.has(area)) areas.set(area, []);
+          areas
+            .get(area)
+            .push(`- **${FLAG_LABEL[flag]}:** ${oneLine(finding.text)}`);
+        });
+        areas.forEach((items, area) => lines.push(`### ${area}`, ...items));
+        if (Array.isArray(item.competencies) && item.competencies.length) {
+          lines.push("### Competency tags");
+          item.competencies.forEach((tag) => {
+            lines.push(`- **Suggested:** ${oneLine(tag.code)}`);
+            if (oneLine(tag.reason))
+              lines.push(`- **Reason:** ${oneLine(tag.reason)}`);
+          });
+        }
+        if (Array.isArray(item.questions) && item.questions.length) {
+          lines.push("### Questions");
+          item.questions.forEach((text) =>
+            lines.push(`- **Question:** ${oneLine(text)}`),
+          );
+        }
+        return lines.join("\n");
       }
 
       function applySuggestionsFile(data) {
@@ -4230,8 +4274,9 @@
         if (!list) throw new Error('the file has no "suggestions" list.');
         state.suggestions = Object.fromEntries(
           list
-            .filter((item) => item?.claimId && item.agentSuggestion)
-            .map((item) => [item.claimId, String(item.agentSuggestion)]),
+            .filter((item) => item?.claimId)
+            .map((item) => [item.claimId, suggestionItemText(item)])
+            .filter(([, text]) => text),
         );
         state.suggestionsHint = "";
         renderSuggestions();
@@ -4242,16 +4287,11 @@
         applySuggestionsFile(text ? JSON.parse(text) : {});
       }
 
-      // Uses the file picked with Reload, else source/suggestions/suggestions.json in the remembered folder.
+      // Each artifact's replies sit beside its data file. A file opened by hand has no folder, so it uses the file picked with Reload.
       async function suggestionsFileHandle() {
-        const picked = await recallHandle("suggestionsFile");
-        if (picked) return picked;
-        const project = await recallHandle("exportProject");
-        if (!project) return null;
+        if (!state.sessionDir) return recallHandle("suggestionsFile");
         try {
-          const root = await sourceRootOf(project);
-          const dir = await root.getDirectoryHandle("suggestions");
-          return await dir.getFileHandle("suggestions.json");
+          return await state.sessionDir.getFileHandle("suggestions.json");
         } catch (error) {
           if (error.name === "NotFoundError") return null;
           throw error;
@@ -4262,7 +4302,7 @@
       async function refreshSuggestions(interactive = false) {
         try {
           let handle;
-          if (interactive && window.showOpenFilePicker) {
+          if (interactive && window.showOpenFilePicker && !state.sessionDir) {
             [handle] = await window.showOpenFilePicker({
               types: [
                 {
@@ -4284,7 +4324,7 @@
           if ((await handle.queryPermission({ mode: "read" })) !== "granted") {
             if (!interactive) {
               state.suggestionsHint =
-                "Click Reload to read the agent's replies from source/suggestions/suggestions.json.";
+                "Click Reload to read the agent's replies from this artifact's folder.";
               renderSuggestions();
               if (!$("suggestionsView").hidden)
                 showToast(
@@ -4721,7 +4761,7 @@
       }
 
       function exportFileName(extension) {
-        return `${exportBaseName()}.${extension}`;
+        return `${exportBaseName()}_${timeStamp()}.${extension}`;
       }
 
       // Picks the project folder once; exports go into its existing source/ folder.
@@ -4746,10 +4786,31 @@
         return project.getDirectoryHandle("source");
       }
 
-      // Writes into source/, replacing any file with the same name.
+      // Local date and time, e.g. 2026-11-16_1430. Used in data and export folder names.
+      function timeStamp() {
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+      }
+
+      // Exports go to <session folder>/Export. Open existing has no known folder, so ask once for the one holding the file.
+      async function exportTarget() {
+        if (!state.sessionDir) {
+          if (!window.showDirectoryPicker) return null;
+          state.sessionDir = await window.showDirectoryPicker({
+            mode: "readwrite",
+          });
+          await rememberHandle("sessionDir", state.sessionDir);
+        }
+        if (!(await ensureWritable(state.sessionDir)))
+          throw new Error("Edit access to the session folder was not granted.");
+        return state.sessionDir.getDirectoryHandle("Export", { create: true });
+      }
+
+      // Writes into the Export folder.
       async function saveExport(blob, fileName) {
         try {
-          const root = await exportRootFolder();
+          const root = await exportTarget();
           if (root) {
             await writeDirFile(root, fileName, blob);
             showToast(`Saved ${fileName}`);
@@ -5103,18 +5164,16 @@ ${slides
           return;
         }
         try {
-          const root = await exportRootFolder();
-          if (!root) {
+          const exportDir = await exportTarget();
+          if (!exportDir) {
             showToast(
               "This browser cannot save folders. Use Edge, Chrome or Brave.",
               true,
             );
             return;
           }
-          const folder = exportBaseName();
-          // Replaces the previous export with the same name.
-          await root.removeEntry(folder, { recursive: true }).catch(() => {});
-          const dir = await root.getDirectoryHandle(folder, {
+          const folder = `${exportBaseName()}_${timeStamp()}`;
+          const dir = await exportDir.getDirectoryHandle(folder, {
             create: true,
           });
           const shots = {};
@@ -5158,7 +5217,7 @@ ${slides
               2,
             ),
           );
-          showToast(`Saved html/${folder}`);
+          showToast(`Saved Export/${folder}`);
           const preview = deckPreviewHtml(claims, $("storyToggle").checked);
           if (state.deckUrl) URL.revokeObjectURL(state.deckUrl);
           state.deckUrl = URL.createObjectURL(
@@ -6489,21 +6548,24 @@ ${slides
         }
         state.candidate = { name, project };
         try {
-          const suggestedName = `${
-            name
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-+|-+$/g, "") || "candidate"
-          }-${$("levelSelect").value.toLowerCase()}.json`;
-          const handle = await window.showSaveFilePicker({
-            suggestedName,
-            types: [
-              {
-                description: "JSON",
-                accept: { "application/json": [".json"] },
-              },
-            ],
+          const root = await exportRootFolder();
+          if (!root) {
+            setDataStatus(
+              "This browser cannot create data folders. Use Microsoft Edge, Chrome or Brave.",
+              true,
+            );
+            return;
+          }
+          // One folder per new data file: name_level_date_time/name_level_date_time.json.
+          const folder = `${exportBaseName()}_${timeStamp()}`;
+          const sessionDir = await root.getDirectoryHandle(folder, {
+            create: true,
           });
+          const handle = await sessionDir.getFileHandle(`${folder}.json`, {
+            create: true,
+          });
+          await rememberHandle("sessionDir", sessionDir);
+          state.sessionDir = sessionDir;
           state.pendingHandle = null;
           if (!(await ensureWritable(handle))) {
             state.pendingHandle = handle;
@@ -6551,9 +6613,10 @@ ${slides
       // Only the Grant access state reuses the file that failed permission.
       async function onConnectClick() {
         try {
-          const handle =
-            state.pendingHandle ||
-            (
+          let handle = state.pendingHandle;
+          const picked = !handle;
+          if (picked)
+            handle = (
               await window.showOpenFilePicker({
                 mode: "readwrite",
                 types: [
@@ -6565,8 +6628,14 @@ ${slides
               })
             )[0];
           state.pendingHandle = null;
-          if (await connectDataFile(handle))
+          if (await connectDataFile(handle)) {
+            // A file opened by hand has no known session folder, so exports fall back to source/Export.
+            if (picked) {
+              state.sessionDir = null;
+              await rememberHandle("sessionDir", null);
+            }
             showToast(`Connected to ${handle.name}`);
+          }
         } catch (error) {
           if (error.name !== "AbortError")
             setDataStatus(`Could not open the file: ${error.message}`, true);
@@ -6585,7 +6654,7 @@ ${slides
       }
 
       async function restoreDataFile() {
-        if (!window.showOpenFilePicker || !window.showSaveFilePicker) {
+        if (!window.showOpenFilePicker || !window.showDirectoryPicker) {
           setDataStatus(
             "This browser cannot create or save data files. Use Microsoft Edge, Chrome or Brave.",
             true,
@@ -6597,6 +6666,7 @@ ${slides
         try {
           const handle = await recallDataFile();
           if (!handle) return;
+          state.sessionDir = await recallHandle("sessionDir");
           if (
             (await handle.queryPermission({ mode: "readwrite" })) === "granted"
           ) {

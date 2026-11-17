@@ -1,6 +1,13 @@
 # GAP artifact polisher: reply format and example
 
-Read by the `gap-artifact-polisher` agent before writing any reply.
+Read by the `gap-artifact-polisher` agent before writing any reply. Replies are stored as version 2 structured JSON (see the schema reference); the labels below map to fields:
+
+- **Strongest** → finding with `flag: "strong"`
+- **Suggestion** → finding with `flag: "improve"`
+- **Note** → finding with `flag: "note"`
+- **Suggested** + **Reason** → `competencies` item with `code` and `reason`
+- **Question** → entry in `questions`
+- Section heading → `area`
 
 ## Draft reply sections
 
@@ -17,15 +24,13 @@ Phrase each suggestion as an improvement, for example "It would be clearer to...
 
 ## Reply format
 
-- One `###` heading per section, with bullets only (no paragraphs). Every section, including Competency tags, uses bullets.
-- Every **Suggestion** bullet is followed by a **Reason** bullet saying why the change helps. Never leave a Suggestion without a Reason.
+- One `area` per section. Findings are short sentences, not paragraphs.
+- Every `improve` finding is paired with a competency or a reason sentence in its text. Never leave a suggestion without its reason.
 - Each **Suggestion** names the concrete change to make (what to add, rename or measure), not only the problem.
-- Competency tags: one bullet per competency, each followed by a **Reason** bullet. There is no fixed count; suggest only strongly supported competencies. If the text supports them only weakly, name the closest fit and say so in its **Reason**.
-- Questions: add a `### Questions` section only when a claim's text is too thin to judge a competency or number. Use one **Question** bullet per missing item, at most three, asking for the exact detail needed (for example, the baseline figure or the competency the test covered). Omit the section otherwise.
-- Bold labels: **Strongest**, **Suggestion**, **Reason**, **Suggested**, **Question**.
-- End each **Strongest** bullet with ✅ and each **Suggestion** bullet with ⚠️, after the last word.
-- Use only ✅ and ⚠️ as status icons.
-- Keep each section other than Competency tags to 2 or 3 bullets. Use a table of missing items when there are two or more artifacts.
+- Competency tags: one `competencies` item per competency, each with a `reason`. There is no fixed count; suggest only strongly supported competencies. If the text supports them only weakly, name the closest fit and say so in its reason.
+- Questions: fill `questions` only when a claim's text is too thin to judge a competency or number. At most three, asking for the exact detail needed (for example, the baseline figure or the competency the test covered). Leave it empty otherwise.
+- Do not add status icons or emojis to any field.
+- Keep each area to 2 or 3 findings. Use a table of missing items in the chat report when there are two or more artifacts.
 - Do not include claim phrasings or description bullets. Do not name tiers (Critical, Important, Supporting).
 
 ## Example
@@ -42,10 +47,9 @@ After: 2 hours per release
 Consequence: Releases are checked every sprint.
 ```
 
-Reply, Problem section:
+Stored finding, Problem section:
 
-### Problem and purpose
-
-- **Strongest:** The release delay is named and measured. ✅
-- **Suggestion:** It would be clearer to name the release that was blocked. ⚠️
-- **Reason:** A named release makes the problem easy to check.
+```json
+{ "area": "Problem and purpose", "flag": "strong", "text": "The release delay is named and measured." }
+{ "area": "Problem and purpose", "flag": "improve", "text": "It would be clearer to name the release that was blocked. A named release makes the problem easy to check." }
+```

@@ -10,7 +10,37 @@ Use only the 12 codes in Appendix A: OWN, DOM, TST, BUG, TPS, COM, TLS, PSC, AUT
 
 ## Suggestions file
 
-`suggestions.json` sits at `source/suggestions/suggestions.json`, separate from the data file, and is not part of the claims. Shape: `{version, candidate, level, exportedAt, suggestions: [{claimId, agentSuggestion}]}`. Each `agentSuggestion` is the agent's reply for that claim, shown on the Suggestions page. The file is git-ignored.
+`suggestions.json` sits in the same folder as its data file (for example `source/<folder>/suggestions.json`), so each artifact or position keeps its own replies. It is not part of the claims. Shape (version 2, structured, no markdown):
+
+```json
+{
+  "version": 2,
+  "candidate": { "name": "", "project": "" },
+  "level": "SE",
+  "exportedAt": "ISO-8601",
+  "suggestions": [
+    {
+      "claimId": "fake-se-01",
+      "summary": "One-line verdict.",
+      "competencies": [
+        { "code": "OWN", "reason": "Why the text supports it." }
+      ],
+      "findings": [
+        { "area": "Number", "flag": "improve", "text": "The concrete change." }
+      ],
+      "questions": []
+    }
+  ]
+}
+```
+
+- `flag` is `strong` (green dot), `improve` (red dot) or `note`. Use the flag, never a label in the text.
+- `area` groups findings in the Suggestions table (for example Overall, Number, Proof, Units, Consequence).
+- `competencies` are suggested tags with a reason; use codes from Appendix A.
+- `questions` holds at most three items when the text is too thin to judge.
+- Version 1 items with `agentSuggestion` text are still read by the app.
+
+The Suggestions page shows each item as the agent's reply for that claim. The file is git-ignored.
 
 ## Input document
 

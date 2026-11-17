@@ -27,9 +27,9 @@ The user gives a document (attached or by path) with one block per artifact. A `
 
 When the user says "analyze my artifact(s)" or "assess my artifact(s)", always run this mode, even if no pasted block is given. Every run must write the replies to `suggestions.json`; a chat-only reply is not enough. No pasted block is needed:
 
-1. Find the latest data `.json` in `source/` by modified time, ignoring `suggestions.json`. If none exists, ask for the exported file path and stop.
+1. Find the latest data `.json` in `source/<folder>/` by modified time, ignoring `suggestions.json`. Its folder is the artifact folder. If none exists, ask for the exported file path and stop.
 2. For each claim with a `point`, review its `point`, `problem`, `before`, `after`, `consequence`, `method`, `links`, `images` and `competencies` using the Reply format below. Claims without a `point` are skipped and listed in the report. Where the text is too thin to judge, add a `### Questions` section asking the user for the missing detail (see the replies reference).
-3. Write each reply to `source/suggestions/suggestions.json` (create the `suggestions` folder if missing), as `{claimId, agentSuggestion}`, replacing any earlier entry for that claim. Do not change the data file. Competency suggestions appear in the reply only, so the user's ticks are not overwritten.
+3. Write each reply to `suggestions.json` in that same artifact folder, using the version 2 structured shape in the schema reference (`claimId`, `summary`, `competencies`, `findings` with a `flag`, `questions`). Replace any earlier entry for that claim and write the whole file with 2-space indentation. Do not change the data file. Competency suggestions appear in the reply only, so the user's ticks are not overwritten.
 4. Report the claims updated, the claims with questions and the questions asked for each, and the `suggestions.json` path. The Suggestions page in Stitch loads this file on its own.
 
 ## Draft mode
@@ -50,7 +50,7 @@ Use draft mode when the user says draft, or the block comes from the app's Copy 
 2. Split the document into artifacts. For each, list any Evidence check items that are missing (schema reference).
 3. Draft every artifact with the suggested fields, leaving missing items blank. Show all drafts in one message, with the missing items for each artifact.
 4. Write directly. Do not wait for confirmation. The user adjusts any claim in the app afterwards. If `source/<your-name>-<level>.json` is missing, ask for the path to the exported file before writing.
-5. Append the drafted claims to `source/<your-name>-<level>.json`. Write each reply to `source/suggestions/suggestions.json` as `{claimId, agentSuggestion}`. Use the next free id (`pdf-NN` for PDF-sourced, otherwise `artifact-NN`). Set `status` and `selectedForPack` as described under Draft mode. Set `level` to the target level and `createdAt` to `2026-11-06T00:00:00.000Z`. Leave other unknown fields empty.
+5. Append the drafted claims to `source/<your-name>-<level>.json`. Write each reply to `suggestions.json` in the same folder as that data file, in the version 2 structured shape from the schema reference. Use the next free id (`pdf-NN` for PDF-sourced, otherwise `artifact-NN`). Set `status` and `selectedForPack` as described under Draft mode. Set `level` to the target level and `createdAt` to `2026-11-06T00:00:00.000Z`. Leave other unknown fields empty.
 6. Validate: parse the file with `node.exe -e` and confirm every required field exists on each new claim. Do not use `!` inside double-quoted shell strings; write `(k in c)===false` instead.
 7. Report the claims added, the artifacts with missing items and what is missing, any warnings, and the next step: in Stitch, click Open existing and choose `source/<your-name>-<level>.json`.
 
